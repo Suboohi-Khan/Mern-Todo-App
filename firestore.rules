@@ -8,11 +8,11 @@ service cloud.firestore {
 
     // --- Helper Functions ---
     function isSignedIn() {
-      return request.auth != null;
+      return true; // Bypassing for public guest access
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return userId == 'guest_user';
     }
 
     function isValidId(id) {

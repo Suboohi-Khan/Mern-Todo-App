@@ -25,8 +25,6 @@ import { TodoItem } from './features/todos/components/TodoItem';
 import { FilterBar } from './features/todos/components/FilterBar';
 
 export default function App() {
-  const [user, setUser] = useState(auth.currentUser);
-  const [loading, setLoading] = useState(true);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodo, setNewTodo] = useState('');
   const [category, setCategory] = useState<TodoCategory>('personal');
@@ -34,23 +32,12 @@ export default function App() {
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+  const PUBLIC_USER_ID = 'guest_user';
 
   useEffect(() => {
-    if (!user) {
-      setTodos([]);
-      return;
-    }
-
     const q = query(
       collection(db, 'todos'),
-      where('userId', '==', user.uid),
+      where('userId', '==', PUBLIC_USER_ID),
       orderBy('createdAt', 'desc')
     );
 
@@ -65,17 +52,17 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
   const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTodo.trim() || !user) return;
+    if (!newTodo.trim()) return;
 
     try {
       await addDoc(collection(db, 'todos'), {
         text: newTodo,
         completed: false,
-        userId: user.uid,
+        userId: PUBLIC_USER_ID,
         createdAt: serverTimestamp(),
         category,
         priority
@@ -110,45 +97,9 @@ export default function App() {
     return matchesFilter && matchesSearch;
   });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
-        <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="w-8 h-8 border-2 border-slate-900 border-t-transparent rounded-full"
-        />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-white p-8 rounded-3xl shadow-sm border border-slate-200 text-center"
-        >
-          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white">
-            <CheckCircle2 size={32} />
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">TaskFlow</h1>
-          <p className="text-slate-500 mb-8 leading-relaxed">Streamline your day with the ultimate MERN-powered todo experience.</p>
-          <button
-            onClick={signInWithGoogle}
-            className="w-full bg-slate-900 text-white rounded-xl py-4 font-medium hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-          >
-            Sign in with Google
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-      <Header user={user} />
+      <Header />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
         <TodoForm 
