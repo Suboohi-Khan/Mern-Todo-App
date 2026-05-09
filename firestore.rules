@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Todo Validation ---
+    function isValidTodo(todo) {
+      let requiredFields = ['text', 'completed', 'userId', 'createdAt'];
+      let allowedCategories = ['personal', 'work', 'shopping', 'health', 'other'];
+      let allowedPriorities = ['low', 'medium', 'high'];
+
+      return todo.keys().hasAll(requiredFields)
+        && todo.text is string && todo.text.size() <= 500
+        && todo.completed is bool
+        && isOwner(todo.userId)
+        && todo.createdAt == request.time
+        && (!todo.keys().hasAny(['category']) || todo.category in allowedCategories)
+        && (!todo.keys().hasAny(['priority']) || todo.priority in allowedPriorities)
+        && todo.keys().size() <= 10; // Prevent shadow fields
+    }
+
+    // --- Collection: Todos ---
+    match /todos/{todoId} {
+      allow get: if isSignedIn() && isOwner(existing().userId);
+      allow list: if isSignedIn() && isOwner(resource.data.userId);
+      
+      allow create: if isSignedIn() 
+        && isValidId(todoId)
+        && isValidTodo(incoming());
+
+      allow update: if isSignedIn()
+        && isOwner(existing().userId)
+        && isValidTodo(incoming())
+        && (
+          // Action: Toggle completion
+          (incoming().diff(existing()).affectedKeys().hasOnly(['completed'])) ||
+          // Action: Full Edit (excluding userId and createdAt)
+          (incoming().userId == existing().userId && incoming().createdAt == existing().createdAt)
+        );
+
+      allow delete: if isSignedIn() && isOwner(existing().userId);
+    }
+
+    // --- Collection: Users ---
+    // (Simple profile storage if needed, not fully implemented in UI yet but good to secure)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId)
+        && incoming().email == request.auth.token.email
+        && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isOwner(userId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL']);
+    }
+  }
+}
